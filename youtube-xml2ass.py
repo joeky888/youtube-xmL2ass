@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 __authors__  = (
-	'Nirbheek Chauhan',
-	)
+    'Nirbheek Chauhan',
+    )
 
 __license__ = 'Public Domain'
 __version__ = '2012.01.12'
 
 DEBUG = False
 
-import xml.etree.ElementTree
+import xml.etree.ElementTree,codecs
 
 class YoutubeAss(object):
     def __init__(self, string):
@@ -29,7 +29,7 @@ class YoutubeAss(object):
         # Font size and Shadow/Outline pixel widths apply to this screen size.
         self.width = 100
         self.height = 100
-        self.xml = xml.etree.ElementTree.fromstring(string)
+        self.xml = xml.etree.ElementTree.fromstring(string.encode('utf-8'))
         # Subtitle events are a dict because annotation order is irrelevant
         self.events = {}
         self.styles = {}
@@ -111,7 +111,7 @@ class YoutubeAss(object):
             if not hasattr(each.find('TEXT'), "text"):
                 print("Skipping empty annotation with id: "+ant_id)
                 continue
-            text = each.find('TEXT').text.encode('utf-8')
+            text = each.find('TEXT').text.encode('utf8').decode('utf8')
             moving_region = each.find('segment').find('movingRegion')
             box = moving_region.findall('rectRegion')
             if not box:
@@ -138,15 +138,15 @@ class YoutubeAss(object):
                 bgColor = each.find('appearance').get('bgColor')
             else:
                 # There's no colour, let's use black/white
-                fgColor = '1'
+                fgColor = '16777215'
                 bgColor = '0'
             self.events.update({
-                ant_id: {"Text": text, "Start": t1, "End": t2},
+                ant_id: {"Text": text.replace("\n", "\\n"), "Start": t1, "End": t2},
             })
             self.styles.update({
                 ant_id: {"PrimaryColour": fgColor, "BackColour": bgColor,
-                         "Alignment": align, "MarginL": margins[0],
-                         "MarginR": margins[1], "MarginV": margins[2],},
+                         "Alignment": align, "MarginL": "{0:.2f}".format(margins[0]),
+                         "MarginR": "{0:.2f}".format(margins[1]), "MarginV": "{0:.2f}".format(margins[2]),},
             })
 
     def _convert_to_ass(self):
@@ -166,12 +166,12 @@ class YoutubeAss(object):
         """
         misc_data = {
             "Fontname": "Arial", "Fontsize": "4.5", "Bold": "0",
-            "Italic": "0", "BorderStyle": "1", "Outline": "0.1", "Shadow": "0.2",
+            "Italic": "0", "BorderStyle": "0.1", "Outline": "0.1", "Shadow": "0",
             "Encoding": "0",
         }
         for (name, data) in self.styles.items():
             data.update(misc_data)
-            line = "Style: {Name},{Fontname},{Fontsize},{PrimaryColour}," \
+            line = u"Style: {Name},{Fontname},{Fontsize},{PrimaryColour}," \
             "{PrimaryColour},{PrimaryColour},{BackColour},{Bold}," \
             "{Italic},{BorderStyle},{Outline},{Shadow},{Alignment}," \
             "{MarginL},{MarginR},{MarginV},0,{Encoding}" \
@@ -190,13 +190,13 @@ class YoutubeAss(object):
         }
         for (name, data) in self.events.items():
             data.update(misc_data)
-            line = "Dialogue: {Marked},{Start},{End},{Style}," \
+            line = u"Dialogue: {Marked},{Start},{End},{Style}," \
             "{Name},{MarginL},{MarginR},{MarginV},{Effect},{Text}" \
             "\n".format(Style=name, **data)
             self.Events += line
 
     def save(self, filename):
-        with open(filename, 'w') as f:
+        with codecs.open(filename, 'w', encoding='utf8') as f:
             f.write(self.Script_Info)
             f.write("\n")
             f.write(self.V4_Styles)
@@ -206,20 +206,12 @@ class YoutubeAss(object):
 
 if __name__ == "__main__":
     import sys
-    try:
-        from urllib2 import urlopen
-    except ImportError:
-        from urllib.request import urlopen
     if len(sys.argv) < 2 or sys.argv[1] in ("--help", "-h"):
-        print("Usage: {0} <youtube video id>".format(sys.argv[0]))
+        print("Usage: {0} <filename>".format(sys.argv[0]))
         exit(0)
-    video_id = sys.argv[1]
-    url = "http://youtube.com/annotations/read2?feat=TCS&video_id=" + video_id
-    xml_data = urlopen(url).read()
-    if DEBUG:
-        with open(video_id+'-annotations.xml', 'w') as f:
-            f.write(str(xml_data))
-    ass = YoutubeAss(xml_data)
-    ass.save("{0}.ass".format(video_id))
 
-# vim: set ts=4 sw=4 sts=4 noet ai si filetype=python:
+    filename = sys.argv[1]
+    with codecs.open(filename,'r',encoding='utf8') as f:
+        xml_data = f.read()
+    ass = YoutubeAss(xml_data)
+    ass.save(filename + ".ass")
